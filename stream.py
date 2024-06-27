@@ -4,6 +4,7 @@ import argparse
 import socket
 import threading
 import time
+import os
 
 gi.require_version('Gst', '1.0')
 gi.require_version('GstRtspServer', '1.0')
@@ -83,11 +84,12 @@ class SensorFactory(GstRtspServer.RTSPMediaFactory):
         appsrc.connect('need-data', self.on_need_data)
 
 class GstServer(GstRtspServer.RTSPServer):
-    def __init__(self, buffer, fps, width, height, stream_count, ip_address, **properties):
+    def __init__(self, buffer, fps, width, height, stream_count, ip_address, stream_name, **properties):
         super(GstServer, self).__init__(**properties)
         self.factories = []
         self.ip_address = ip_address
         self.port = opt.port
+        self.stream_name = stream_name
         for i in range(stream_count):
             factory = SensorFactory(buffer, fps, width, height)
             factory.set_shared(True)
@@ -95,7 +97,7 @@ class GstServer(GstRtspServer.RTSPServer):
         self.set_service(str(self.port))
         mount_points = self.get_mount_points()
         for i, factory in enumerate(self.factories):
-            stream_path = f"/video_stream{i+1}"
+            stream_path = f"/{self.stream_name}{i}"
             mount_points.add_factory(stream_path, factory)
             print(f"RTSP stream available at: rtsp://{self.ip_address}:{self.port}{stream_path}")
         self.attach(None)
@@ -127,6 +129,8 @@ if __name__ == "__main__":
     except ValueError:
         pass
 
+    stream_name = os.path.splitext(os.path.basename(opt.video))[0]
+
     Gst.init(None)
     ip_address = get_ip_address()
     frame_buffer = FrameBuffer()
@@ -136,7 +140,7 @@ if __name__ == "__main__":
     capture_thread.daemon = True
     capture_thread.start()
 
-    server = GstServer(frame_buffer, opt.fps, opt.image_width, opt.image_height, opt.stream_count, ip_address)
+    server = GstServer(frame_buffer, opt.fps, opt.image_width, opt.image_height, opt.stream_count, ip_address, stream_name)
 
     loop = GLib.MainLoop()
 
